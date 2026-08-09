@@ -1,0 +1,164 @@
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { getPaymentInfo } from '../api/payments'
+import { recordPayment } from '../api/payments'
+import { extractErrorMessage } from '../api/client'
+import Spinner from '../components/Spinner'
+import Money from '../components/Money'
+
+const METHODS = ['cash', 'mobile_money', 'bank_transfer']
+
+export default function MakePayment() {
+  const { potId } = useParams()
+  const navigate = useNavigate()
+  const [info, setInfo] = useState(null)
+  const [daysToPay, setDaysToPay] = useState(1)
+  const [method, setMethod] = useState('mobile_money')
+  const [reference, setReference] = useState('')
+  const [useWalletCredit, setUseWalletCredit] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    getPaymentInfo(potId)
+      .then((data) => {
+        setInfo(data)
+        setDaysToPay(Math.min(1, data.max_days_payable || 1))
+      })
+      .catch((err) => setLoadError(extractErrorMessage(err)))
+  }, [potId])
+
+  const estimatedAmount = info ? Number(daysToPay) * info.daily_amount : 0
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSubmitError('')
+    setSubmitting(true)
+    try {
+      await recordPayment({
+        pot_id: potId,
+        days_to_pay: Number(daysToPay),
+        method,
+        reference: reference || undefined,
+        use_wallet_credit: useWalletCredit,
+      })
+      navigate(`/pots/${potId}`, { replace: true })
+    } catch (err) {
+      setSubmitError(extractErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (!info && !loadError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-xl px-6 py-16 text-center">
+        <p className="rounded-lg bg-clay/10 px-3 py-2 text-sm text-clay">{loadError}</p>
+        <Link to={`/pots/${potId}`} className="btn-outline mt-4 inline-flex">Back to pot</Link>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-auto max-w-md px-6 py-10">
+      <Link to={`/pots/${potId}`} className="text-sm text-muted hover:text-ink">&larr; {info.pot_name}</Link>
+      <h1 className="mt-3 text-3xl font-semibold">Make a payment</h1>
+
+      <div className="card mt-6 grid grid-cols-2 gap-4 text-sm">
+        <InfoRow label="Remaining days" value={info.remaining_days} />
+        <InfoRow label="Max payable now" value={info.max_days_payable} />
+        <InfoRow label="Wallet balance" value={<Money amount={info.wallet_balance} currency={info.wallet_currency} />} />
+        <InfoRow label="Daily amount" value={<Money amount={info.daily_amount} currency={info.currency} />} />
+      </div>
+
+      <form onSubmit={handleSubmit} className="card mt-6 flex flex-col gap-4">
+        <div>
+          <label className="field-label" htmlFor="days_to_pay">Days to pay</label>
+          <input
+            id="days_to_pay"
+            type="number"
+            min={1}
+            max={info.max_days_payable || undefined}
+            required
+            className="field-input"
+            value={daysToPay}
+            onChange={(e) => setDaysToPay(e.target.value)}
+          />
+          <p className="mt-1.5 text-xs text-muted">
+            Today's day is filled first — extra days go to your buffer for later allocation.
+          </p>
+        </div>
+
+        <div className="flex items-baseline justify-between rounded-xl bg-teal-pale px-4 py-3">
+          <span className="text-sm font-medium text-teal">Amount due</span>
+          <Money amount={estimatedAmount} currency={info.currency} className="text-lg font-semibold text-teal" />
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="method">Payment method</label>
+          <select
+            id="method"
+            className="field-input capitalize"
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+          >
+            {METHODS.map((m) => (
+              <option key={m} value={m}>{m.replace('_', ' ')}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="field-label" htmlFor="reference">Reference (optional)</label>
+          <input
+            id="reference"
+            className="field-input"
+            placeholder="Transaction ID or note"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+          />
+        </div>
+
+        {info.wallet_balance > 0 && (
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-ink/30 text-teal focus:ring-teal"
+              checked={useWalletCredit}
+              onChange={(e) => setUseWalletCredit(e.target.checked)}
+            />
+            Use wallet credit toward this payment
+          </label>
+        )}
+
+        {submitError && (
+          <p role="alert" className="rounded-lg bg-clay/10 px-3 py-2 text-sm text-clay">
+            {submitError}
+          </p>
+        )}
+
+        <button type="submit" disabled={submitting} className="btn-primary mt-1 w-full">
+          {submitting ? <Spinner className="border-paper/30 border-t-paper" /> : 'Record payment'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-0.5 font-mono font-medium">{value}</p>
+    </div>
+  )
+}
