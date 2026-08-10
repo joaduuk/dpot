@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Integer, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, String, Float, Integer, DateTime, Date, ForeignKey, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -37,6 +37,7 @@ class Payout(Base):
     eligible_at = Column(DateTime, nullable=True)   # notice_given_at + 24hrs
     completed_at = Column(DateTime, nullable=True)
     notes = Column(String, nullable=True)
+    requested_payout_date = Column(Date, nullable=True)  # date the saver wants the payout on
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

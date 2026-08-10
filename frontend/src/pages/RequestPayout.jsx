@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { getPot } from '../api/pots'
 import { requestPayout } from '../api/payouts'
 import { extractErrorMessage } from '../api/client'
 import Spinner from '../components/Spinner'
+import Money from '../components/Money'
 
 const METHODS = [
   { value: 'mobile_money', label: 'Mobile money' },
@@ -13,13 +15,27 @@ const METHODS = [
 export default function RequestPayout() {
   const { potId } = useParams()
   const navigate = useNavigate()
+  const [pot, setPot] = useState(null)
+  const [loadError, setLoadError] = useState('')
+
   const [payoutDate, setPayoutDate] = useState(new Date().toISOString().slice(0, 10))
   const [method, setMethod] = useState('mobile_money')
-  const [accountDetails, setAccountDetails] = useState('')
+  const [mobileMoneyNumber, setMobileMoneyNumber] = useState('')
+  const [bankAccount, setBankAccount] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  const needsAccountDetails = method !== 'cash'
+  useEffect(() => {
+    getPot(potId)
+      .then(setPot)
+      .catch((err) => setLoadError(extractErrorMessage(err)))
+  }, [potId])
+
+  // Mirrors the backend's own calculation so the saver sees the real
+  // number before submitting — actual figures are snapshotted server-side.
+  const grossAmount = pot ? pot.days_paid * pot.daily_amount : 0
+  const platformFee = pot ? pot.daily_amount : 0
+  const netPayout = grossAmount - platformFee
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -27,9 +43,10 @@ export default function RequestPayout() {
     setSubmitting(true)
     try {
       await requestPayout(potId, {
-        payout_date: payoutDate,
         method,
-        account_details: needsAccountDetails ? accountDetails : undefined,
+        mobile_money_number: method === 'mobile_money' ? mobileMoneyNumber : undefined,
+        bank_account: method === 'bank_transfer' ? bankAccount : undefined,
+        requested_payout_date: payoutDate,
       })
       navigate(`/pots/${potId}`, { replace: true })
     } catch (err) {
@@ -39,11 +56,38 @@ export default function RequestPayout() {
     }
   }
 
+  if (!pot && !loadError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner />
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-xl px-6 py-16 text-center">
+        <p className="rounded-lg bg-clay/10 px-3 py-2 text-sm text-clay">{loadError}</p>
+        <Link to={`/pots/${potId}`} className="btn-outline mt-4 inline-flex">Back to pot</Link>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-md px-6 py-10">
       <Link to={`/pots/${potId}`} className="text-sm text-muted hover:text-ink">&larr; Back to pot</Link>
       <h1 className="mt-3 text-3xl font-semibold">Request a payout</h1>
-      <p className="mt-1 text-muted">Your pot is fully paid — choose when and how you'd like to be paid out.</p>
+      <p className="mt-1 text-muted">
+        {pot.days_paid} day{pot.days_paid !== 1 ? 's' : ''} paid — choose when and how you'd like to be paid out.
+        You don't need to wait until the full 30 days are done.
+      </p>
+
+      <div className="card mt-6 grid grid-cols-2 gap-4 text-sm">
+        <Row label="Days covered" value={pot.days_paid} />
+        <Row label="Gross amount" value={<Money amount={grossAmount} currency={pot.currency} />} />
+        <Row label="Platform fee" value={<Money amount={platformFee} currency={pot.currency} />} />
+        <Row label="You'll receive" value={<Money amount={netPayout} currency={pot.currency} className="font-semibold" />} />
+      </div>
 
       <form onSubmit={handleSubmit} className="card mt-6 flex flex-col gap-4">
         <div>
@@ -57,6 +101,9 @@ export default function RequestPayout() {
             value={payoutDate}
             onChange={(e) => setPayoutDate(e.target.value)}
           />
+          <p className="mt-1.5 text-xs text-muted">
+            Pick today, or any date in the future — whenever suits you.
+          </p>
         </div>
 
         <div>
@@ -82,18 +129,30 @@ export default function RequestPayout() {
           </div>
         </div>
 
-        {needsAccountDetails && (
+        {method === 'mobile_money' && (
           <div>
-            <label className="field-label" htmlFor="account_details">
-              {method === 'mobile_money' ? 'Mobile money number' : 'Bank account number'}
-            </label>
+            <label className="field-label" htmlFor="mobile_money_number">Mobile money number</label>
             <input
-              id="account_details"
+              id="mobile_money_number"
               required
               className="field-input"
-              placeholder={method === 'mobile_money' ? '024 123 4567' : 'Account number'}
-              value={accountDetails}
-              onChange={(e) => setAccountDetails(e.target.value)}
+              placeholder="024 123 4567"
+              value={mobileMoneyNumber}
+              onChange={(e) => setMobileMoneyNumber(e.target.value)}
+            />
+          </div>
+        )}
+
+        {method === 'bank_transfer' && (
+          <div>
+            <label className="field-label" htmlFor="bank_account">Bank account number</label>
+            <input
+              id="bank_account"
+              required
+              className="field-input"
+              placeholder="Account number"
+              value={bankAccount}
+              onChange={(e) => setBankAccount(e.target.value)}
             />
           </div>
         )}
@@ -108,6 +167,15 @@ export default function RequestPayout() {
           {submitting ? <Spinner className="border-paper/30 border-t-paper" /> : 'Submit payout request'}
         </button>
       </form>
+    </div>
+  )
+}
+
+function Row({ label, value }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+      <p className="mt-0.5 font-mono font-medium">{value}</p>
     </div>
   )
 }

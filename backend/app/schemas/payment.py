@@ -7,7 +7,7 @@ from app.models.payment import PaymentStatus
 
 class RecordPayment(BaseModel):
     pot_id: UUID
-    days_to_pay: int = Field(..., ge=1, le=30)
+    days_to_pay: int = Field(..., ge=1, le=31)   # was le=30 — a saver could otherwise never pay day 31 in one go
     method: str = Field(..., description="cash | mobile_money | bank_transfer")
     reference: Optional[str] = None
     use_wallet_credit: bool = False
@@ -15,7 +15,7 @@ class RecordPayment(BaseModel):
 
 class AllocateBuffer(BaseModel):
     pot_id: UUID
-    day_number: int = Field(..., ge=1, le=30)
+    day_number: int = Field(..., ge=1, le=31)   # was le=30 — this was the actual bug: blocked dragging onto day 31
 
 
 class PaymentResponse(BaseModel):

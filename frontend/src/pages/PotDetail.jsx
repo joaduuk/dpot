@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getPot, getPotBoard } from '../api/pots'
 import { listPotPayments, allocateBufferDay } from '../api/payments'
+import { getPayoutStatus } from '../api/payouts'
 import { extractErrorMessage } from '../api/client'
 import Spinner from '../components/Spinner'
 import StatusPill from '../components/StatusPill'
@@ -15,20 +16,23 @@ export default function PotDetail() {
   const [pot, setPot] = useState(null)
   const [board, setBoard] = useState(null)
   const [payments, setPayments] = useState(null)
+  const [payout, setPayout] = useState(null)
   const [error, setError] = useState('')
   const [allocating, setAllocating] = useState(false)
 
   const loadAll = useCallback(async () => {
     setError('')
     try {
-      const [potData, boardData, paymentsData] = await Promise.all([
+      const [potData, boardData, paymentsData, payoutData] = await Promise.all([
         getPot(potId),
         getPotBoard(potId),
         listPotPayments(potId),
+        getPayoutStatus(potId),
       ])
       setPot(potData)
       setBoard(boardData)
       setPayments(paymentsData)
+      setPayout(payoutData)
     } catch (err) {
       setError(extractErrorMessage(err))
     }
@@ -39,8 +43,14 @@ export default function PotDetail() {
   }, [loadAll])
 
   const bufferCount = pot?.buffer_days ?? 0
-  const isActive = pot?.status === 'active'
-  const hasBufferDays = isActive && bufferCount > 0
+  // Matches the backend's own gate (_get_active_pot): "completed" (30/30
+  // saving days done) can still accept a payment for day 31, the fee day —
+  // only "cashed_out" (payout already done) or "pending" truly locks it out.
+  const payable = pot?.status === 'active' || pot?.status === 'completed'
+  // No further payments or buffer moves once a payout's been requested —
+  // the pot is being wound down.
+  const canStillPay = payable && !payout
+  const hasBufferDays = canStillPay && bufferCount > 0
 
   async function handleAllocate(dayNumber) {
     setAllocating(true)
@@ -93,7 +103,7 @@ export default function PotDetail() {
         <Stat label="Buffer days" value={pot.buffer_days} />
       </div>
 
-      {isActive && (
+      {canStillPay && (
         <div className="mt-6">
           <Link to={`/pots/${potId}/pay`} className="btn-primary w-full sm:w-auto">
             Make a payment
@@ -101,7 +111,7 @@ export default function PotDetail() {
         </div>
       )}
 
-      <PayoutPanel pot={pot} />
+      <PayoutPanel pot={pot} payout={payout} />
 
       {error && (
         <p role="alert" className="mt-4 rounded-lg bg-clay/10 px-3 py-2 text-sm text-clay">

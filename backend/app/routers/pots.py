@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 from typing import List
 
@@ -10,7 +10,9 @@ from app.models.user import User
 from app.models.pot import Pot, PotStatus, PaymentMethod
 from app.models.payment import DayAllocation, DayAllocationStatus
 from app.models.agent import Agent, AgentStatus
+from app.models.payout import Payout, PayoutStatus
 from app.schemas.pot import PotCreate, PotResponse, PotSummary
+from app.schemas.payout import PayoutRequest, PayoutResponse
 
 router = APIRouter(prefix="/pots", tags=["Pots"])
 
@@ -238,3 +240,122 @@ def get_pot_board(
         "progress_percent": round((pot.days_paid / 30) * 100, 1),
         "days": days,
     }
+
+
+# ── Payout ────────────────────────────────────────────────────────────────
+# Early cashout is allowed any time at least one day is confirmed — not
+# gated behind the pot being fully paid. Day 31 (the fee day) gets no
+# special treatment here: every confirmed day, 1 through 31, counts toward
+# gross_amount the same way. The flat platform fee is always deducted once
+# at payout time, regardless of whether day 31 specifically was paid.
+
+@router.post("/{pot_id}/payout/request", response_model=PayoutResponse)
+def request_payout(
+    pot_id: UUID,
+    data: PayoutRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    pot = (
+        db.query(Pot)
+        .filter(Pot.id == pot_id, Pot.saver_id == current_user.id)
+        .first()
+    )
+    if not pot:
+        raise HTTPException(status_code=404, detail="Pot not found")
+
+    existing = db.query(Payout).filter(Payout.pot_id == pot_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="A payout has already been requested for this pot")
+
+    if data.method == "mobile_money" and not data.mobile_money_number:
+        raise HTTPException(status_code=400, detail="Mobile money number is required for this method")
+    if data.method == "bank_transfer" and not data.bank_account:
+        raise HTTPException(status_code=400, detail="Bank account is required for this method")
+
+    confirmed_days = (
+        db.query(DayAllocation)
+        .filter(DayAllocation.pot_id == pot_id, DayAllocation.status == DayAllocationStatus.confirmed)
+        .count()
+    )
+    if confirmed_days <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No contribution has been made on this pot yet",
+        )
+
+    gross_amount = confirmed_days * pot.daily_amount
+    platform_fee = pot.daily_amount  # TODO: confirm fee rule for early (partial) cashouts
+    agent_commission = 0.0  # TODO: plug in real commission rate for cash/agent-assisted pots
+    net_payout = gross_amount - platform_fee - agent_commission
+
+    now = datetime.utcnow()
+    payout = Payout(
+        pot_id=pot_id,
+        days_paid=confirmed_days,
+        daily_amount=pot.daily_amount,
+        gross_amount=gross_amount,
+        platform_fee=platform_fee,
+        agent_commission=agent_commission,
+        net_payout=net_payout,
+        method=data.method,
+        mobile_money_number=data.mobile_money_number,
+        bank_account=data.bank_account,
+        status=PayoutStatus.pending,
+        requested_at=now,
+        notice_given_at=now,
+        eligible_at=now + timedelta(hours=24),
+        requested_payout_date=data.requested_payout_date or now.date(),
+    )
+    db.add(payout)
+    db.commit()
+    db.refresh(payout)
+    return payout
+
+
+@router.get("/{pot_id}/payout", response_model=PayoutResponse)
+def get_payout_status(
+    pot_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    pot = (
+        db.query(Pot)
+        .filter(Pot.id == pot_id, Pot.saver_id == current_user.id)
+        .first()
+    )
+    if not pot:
+        raise HTTPException(status_code=404, detail="Pot not found")
+
+    payout = db.query(Payout).filter(Payout.pot_id == pot_id).first()
+    if not payout:
+        raise HTTPException(status_code=404, detail="No payout has been requested for this pot")
+    return payout
+
+
+@router.put("/{pot_id}/payout/complete", response_model=PayoutResponse)
+def complete_payout(
+    pot_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin/agent marks a requested payout as actually paid out."""
+    if getattr(current_user, "role", None) not in ("admin", "agent"):
+        raise HTTPException(status_code=403, detail="Not authorized to complete payouts")
+
+    payout = db.query(Payout).filter(Payout.pot_id == pot_id).first()
+    if not payout:
+        raise HTTPException(status_code=404, detail="No payout has been requested for this pot")
+    if payout.status == PayoutStatus.completed:
+        raise HTTPException(status_code=400, detail="Payout has already been completed")
+
+    payout.status = PayoutStatus.completed
+    payout.completed_at = datetime.utcnow()
+
+    pot = db.query(Pot).filter(Pot.id == pot_id).first()
+    if pot:
+        pot.status = PotStatus.cashed_out
+
+    db.commit()
+    db.refresh(payout)
+    return payout

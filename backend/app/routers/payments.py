@@ -38,13 +38,18 @@ def get_or_create_wallet(db: Session, user_id: UUID, currency: str) -> Wallet:
 
 
 def _get_active_pot(pot_id: UUID, user_id: UUID, db: Session) -> Pot:
-    """Get pot and verify it belongs to user and is active."""
+    """
+    Get pot and verify it belongs to user and can still accept payments.
+    "completed" (all 30 saving days done) is included here — day 31, the
+    fee day, is still payable at that point, just like any other day. Only
+    "cashed_out" (payout already completed) actually locks the pot.
+    """
     pot = db.query(Pot).filter(Pot.id == pot_id).first()
     if not pot:
         raise HTTPException(status_code=404, detail="Pot not found")
     if pot.saver_id != user_id:
         raise HTTPException(status_code=403, detail="Not your pot")
-    if pot.status not in [PotStatus.active, PotStatus.pending]:
+    if pot.status not in [PotStatus.active, PotStatus.pending, PotStatus.completed]:
         raise HTTPException(status_code=400, detail="Pot is not active")
     return pot
 
@@ -53,7 +58,8 @@ def _smart_allocate(db: Session, pot: Pot, payment: Payment, days_covered: int):
     """
     Smart allocation:
     1. Fill today's day first (if unpaid)
-    2. Remaining days go to buffer for saver to drag manually
+    2. Remaining days go to buffer for saver to drag manually (including
+       onto day 31, the fee day, once days 1-30 are done)
     """
     today_day = get_today_day_number(pot)
     allocated = 0
@@ -78,21 +84,11 @@ def _smart_allocate(db: Session, pot: Pot, payment: Payment, days_covered: int):
     pot.days_paid += allocated
     pot.buffer_days += remaining
 
-    # Check pot completion
+    # Mark the 30-day saving phase complete. Day 31 (the fee day) is
+    # NOT auto-filled here — it only becomes confirmed if the saver
+    # actually pays/allocates it, exactly like any other day.
     if pot.days_paid >= 30:
         pot.status = PotStatus.completed
-        _fill_fee_day(db, pot)
-
-
-def _fill_fee_day(db: Session, pot: Pot):
-    """Mark day 31 (fee day) as confirmed when pot completes."""
-    fee_day = db.query(DayAllocation).filter(
-        DayAllocation.pot_id == pot.id,
-        DayAllocation.is_fee_day == True,
-    ).first()
-    if fee_day and fee_day.status == DayAllocationStatus.unpaid:
-        fee_day.status = DayAllocationStatus.confirmed
-        fee_day.allocated_at = datetime.utcnow()
 
 
 # ── Payment info endpoint ─────────────────────────────────────────────────
@@ -111,7 +107,9 @@ def get_payment_info(
     wallet = get_or_create_wallet(db, current_user.id, pot.currency)
     db.commit()
 
-    remaining_days = 30 - (pot.days_paid + pot.buffer_days)
+    # 31 total payable slots (days 1-30 + the fee day), not 30 — day 31
+    # counts the same as any other day here.
+    remaining_days = 31 - (pot.days_paid + pot.buffer_days)
     wallet_days = int(wallet.balance / pot.daily_amount) if wallet.balance > 0 else 0
     max_payable = min(remaining_days, remaining_days)  # UI caps at remaining
 
@@ -166,14 +164,16 @@ def record_payment(
             raise HTTPException(status_code=404, detail="Pot not found")
         if pot.agent_id != agent.id:
             raise HTTPException(status_code=403, detail="This saver is not assigned to you")
-        if pot.status not in [PotStatus.active, PotStatus.pending]:
+        if pot.status not in [PotStatus.active, PotStatus.pending, PotStatus.completed]:
             raise HTTPException(status_code=400, detail="Pot is not active")
         recorded_by = "agent"
         agent_id = agent.id
         pay_status = PaymentStatus.pending
 
     # ── Validate days ─────────────────────────────────────────────────────
-    remaining_days = 30 - (pot.days_paid + pot.buffer_days)
+    # 31 total payable slots — day 31 (fee day) counts the same as any
+    # other day, not treated separately.
+    remaining_days = 31 - (pot.days_paid + pot.buffer_days)
 
     if remaining_days <= 0:
         raise HTTPException(status_code=400, detail="This pot is already fully paid")
@@ -245,20 +245,17 @@ def allocate_buffer_day(
 ):
     """
     Saver drags a buffer payment onto a specific unpaid day.
-    This is the core drag-and-drop action.
+    This is the core drag-and-drop action. Day 31 (the fee day) is a valid
+    target here exactly like any other day — no special casing.
     """
     pot = _get_active_pot(data.pot_id, current_user.id, db)
 
     if pot.buffer_days < 1:
         raise HTTPException(status_code=400, detail="No buffer payments to allocate")
 
-    if data.day_number == 31:
-        raise HTTPException(status_code=400, detail="Day 31 is the platform fee day")
-
     day = db.query(DayAllocation).filter(
         DayAllocation.pot_id == pot.id,
         DayAllocation.day_number == data.day_number,
-        DayAllocation.is_fee_day == False,
     ).first()
 
     if not day:
@@ -280,13 +277,14 @@ def allocate_buffer_day(
     day.payment_id = payment.id if payment else None
     day.allocated_at = datetime.utcnow()
 
-    pot.days_paid += 1
     pot.buffer_days -= 1
 
-    # Check completion
-    if pot.days_paid >= 30:
-        pot.status = PotStatus.completed
-        _fill_fee_day(db, pot)
+    # Day 31 (fee day) isn't part of the 30-day progress count — only
+    # days 1-30 increment days_paid, so progress_percent stays out of 30.
+    if not day.is_fee_day:
+        pot.days_paid += 1
+        if pot.days_paid >= 30:
+            pot.status = PotStatus.completed
 
     db.commit()
 
