@@ -15,9 +15,23 @@ export default function Navbar() {
 
         {isAuthenticated ? (
           <nav className="flex items-center gap-5 text-sm">
+            {/* Saving is available to anyone, regardless of role — an
+                agent or admin can also be a saver with their own pots. */}
             <Link to="/pots" className="text-ink/70 hover:text-ink transition-colors">My pots</Link>
             <Link to="/wallet" className="text-ink/70 hover:text-ink transition-colors">Wallet</Link>
+
+            {user?.role === 'agent' && (
+              <Link to="/agent" className="text-ink/70 hover:text-ink transition-colors">Agent dashboard</Link>
+            )}
+            {(user?.role === 'admin' || user?.role === 'super_admin') && (
+              <Link to="/admin" className="text-ink/70 hover:text-ink transition-colors">Admin</Link>
+            )}
+            {user?.role === 'saver' && (
+              <Link to="/agent/apply" className="text-ink/70 hover:text-ink transition-colors">Become an agent</Link>
+            )}
+
             <Link to="/pots/new" className="btn-gold">New pot</Link>
+
             <div className="flex items-center gap-3 pl-3 border-l border-ink/10">
               <span className="hidden sm:block text-ink/60">{user?.full_name}</span>
               <button

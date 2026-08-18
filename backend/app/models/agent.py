@@ -17,6 +17,7 @@ class Agent(Base):
     __tablename__ = "agents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_code = Column(String, unique=True, nullable=True, index=True)  # short human-enterable code, e.g. "AGT-4821"
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, unique=True)
     market_name = Column(String, nullable=False)
     location = Column(String, nullable=False)

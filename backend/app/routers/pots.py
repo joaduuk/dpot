@@ -34,42 +34,32 @@ def create_day_allocations(db: Session, pot_id: UUID):
         db.add(allocation)
 
 
+def _maybe_activate(pot: Pot, db: Session):
+    """
+    No scheduler exists on this backend — lazily flip pending -> active the
+    moment anyone reads a pot whose start date has arrived. Without this, a
+    pot created for a future date stays "pending" forever, even long after
+    that date has passed.
+    """
+    if pot.status == PotStatus.pending and pot.start_date <= date.today():
+        pot.status = PotStatus.active
+        db.commit()
+        db.refresh(pot)
+
+
 @router.post("/", response_model=PotResponse)
 def create_pot(
     data: PotCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Validate agent if cash payment
-    if data.payment_method == PaymentMethod.cash:
-        if not data.agent_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Agent is required for cash payments",
-            )
-
-        agent = (
-            db.query(Agent)
-            .filter(
-                Agent.id == data.agent_id,
-                Agent.status == AgentStatus.active,
-            )
-            .first()
-        )
-
-        if not agent:
-            raise HTTPException(
-                status_code=404,
-                detail="Agent not found or not active",
-            )
-
     # Prevent duplicate active pots
     existing = (
         db.query(Pot)
         .filter(
             Pot.saver_id == current_user.id,
             Pot.name == data.name,
-            Pot.status.in_([PotStatus.pending, PotStatus.active]),
+            Pot.status.in_([PotStatus.pending, PotStatus.active, PotStatus.awaiting_agent]),
         )
         .first()
     )
@@ -82,17 +72,19 @@ def create_pot(
 
     # 30 calendar saving days
     end_date = data.start_date + timedelta(days=29)
-
     today = date.today()
-    status = (
-        PotStatus.active
-        if data.start_date <= today
-        else PotStatus.pending
-    )
+
+    if data.payment_method == PaymentMethod.cash:
+        # No agent required up front — the pot activates the moment an
+        # agent records the saver's first cash payment (see record_payment
+        # in payments.py), which locks that agent to this pot permanently.
+        status = PotStatus.awaiting_agent
+    else:
+        status = PotStatus.active if data.start_date <= today else PotStatus.pending
 
     pot = Pot(
         saver_id=current_user.id,
-        agent_id=data.agent_id,
+        agent_id=None,  # cash pots start unassigned; claimed on first payment
         name=data.name,
         daily_amount=data.daily_amount,
         currency=data.currency,
@@ -107,17 +99,6 @@ def create_pot(
 
     # Create 31 board slots
     create_day_allocations(db, pot.id)
-
-    # Update agent statistics
-    if data.agent_id:
-        agent = (
-            db.query(Agent)
-            .filter(Agent.id == data.agent_id)
-            .first()
-        )
-
-        if agent:
-            agent.total_savers += 1
 
     db.commit()
     db.refresh(pot)
@@ -135,6 +116,15 @@ def list_my_pots(
         .filter(Pot.saver_id == current_user.id)
         .all()
     )
+
+    today = date.today()
+    changed = False
+    for pot in pots:
+        if pot.status == PotStatus.pending and pot.start_date <= today:
+            pot.status = PotStatus.active
+            changed = True
+    if changed:
+        db.commit()
 
     result = []
 
@@ -181,6 +171,8 @@ def get_pot(
             detail="Pot not found",
         )
 
+    _maybe_activate(pot, db)
+
     return pot
 
 
@@ -211,6 +203,8 @@ def get_pot_board(
             status_code=404,
             detail="Pot not found",
         )
+
+    _maybe_activate(pot, db)
 
     allocations = (
         db.query(DayAllocation)
@@ -339,8 +333,8 @@ def complete_payout(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin/agent marks a requested payout as actually paid out."""
-    if getattr(current_user, "role", None) not in ("admin", "agent"):
+    """Admin marks a requested payout as actually paid out."""
+    if getattr(current_user, "role", None) not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Not authorized to complete payouts")
 
     payout = db.query(Payout).filter(Payout.pot_id == pot_id).first()

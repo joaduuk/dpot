@@ -10,9 +10,19 @@ export function register(payload) {
 
 /**
  * POST /auth/login
- * body: { phone, password }
+ * body: { identifier, password } — identifier can be a phone number or email
  * returns: { access_token, token_type, user }
  */
 export function login(payload) {
   return apiClient.post('/auth/login', payload).then((res) => res.data)
+}
+
+/** POST /auth/forgot-password — body: { email } */
+export function forgotPassword(email) {
+  return apiClient.post('/auth/forgot-password', { email }).then((res) => res.data)
+}
+
+/** POST /auth/reset-password — body: { token, new_password } */
+export function resetPassword(token, newPassword) {
+  return apiClient.post('/auth/reset-password', { token, new_password: newPassword }).then((res) => res.data)
 }

@@ -9,7 +9,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import User, UserRole
 from app.models.pot import Pot, PotStatus
 from app.models.payment import Payment, DayAllocation, PaymentStatus, DayAllocationStatus
-from app.models.agent import Agent
+from app.models.agent import Agent, AgentStatus
 from app.models.wallet import Wallet, WalletTransaction, WalletTransactionType, WalletTransactionReason
 from app.schemas.payment import RecordPayment, AllocateBuffer, PaymentResponse, PaymentInfo
 
@@ -49,6 +49,16 @@ def _get_active_pot(pot_id: UUID, user_id: UUID, db: Session) -> Pot:
         raise HTTPException(status_code=404, detail="Pot not found")
     if pot.saver_id != user_id:
         raise HTTPException(status_code=403, detail="Not your pot")
+
+    # No scheduler exists on this backend — lazily flip pending -> active
+    # the moment anyone touches a pot whose start date has arrived. Without
+    # this, a pot created for a future date stays "pending" forever, even
+    # long after that date has passed.
+    if pot.status == PotStatus.pending and pot.start_date <= date.today():
+        pot.status = PotStatus.active
+        db.commit()
+        db.refresh(pot)
+
     if pot.status not in [PotStatus.active, PotStatus.pending, PotStatus.completed]:
         raise HTTPException(status_code=400, detail="Pot is not active")
     return pot
@@ -159,17 +169,35 @@ def record_payment(
         agent = db.query(Agent).filter(Agent.user_id == current_user.id).first()
         if not agent:
             raise HTTPException(status_code=403, detail="Agent profile not found")
+        if agent.status != AgentStatus.active:
+            raise HTTPException(status_code=403, detail="Your agent account is pending approval")
         pot = db.query(Pot).filter(Pot.id == data.pot_id).first()
         if not pot:
             raise HTTPException(status_code=404, detail="Pot not found")
-        if pot.agent_id != agent.id:
-            raise HTTPException(status_code=403, detail="This saver is not assigned to you")
+
+        # Same lazy activation as _get_active_pot — an agent recording a
+        # cash payment on a pending pot whose start date has arrived
+        # should also flip it active, not just saver-initiated reads.
+        if pot.status == PotStatus.pending and pot.start_date <= date.today():
+            pot.status = PotStatus.active
+
+        if pot.agent_id is None:
+            # First cash payment on this pot — this claims it for this
+            # agent, permanently. No other agent can record against it
+            # afterward.
+            pot.agent_id = agent.id
+            agent.total_savers += 1
+            today = date.today()
+            pot.status = PotStatus.active if pot.start_date <= today else PotStatus.pending
+        elif pot.agent_id != agent.id:
+            raise HTTPException(status_code=403, detail="This saver is assigned to a different agent")
+
         if pot.status not in [PotStatus.active, PotStatus.pending, PotStatus.completed]:
             raise HTTPException(status_code=400, detail="Pot is not active")
+
         recorded_by = "agent"
         agent_id = agent.id
         pay_status = PaymentStatus.pending
-
     # ── Validate days ─────────────────────────────────────────────────────
     # 31 total payable slots — day 31 (fee day) counts the same as any
     # other day, not treated separately.

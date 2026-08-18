@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { getPot } from '../api/pots'
+import { getPot, getPotBoard } from '../api/pots'
 import { requestPayout } from '../api/payouts'
 import { extractErrorMessage } from '../api/client'
+import { normalizeBoard } from '../components/PotBoard'
 import Spinner from '../components/Spinner'
 import Money from '../components/Money'
 
@@ -16,6 +17,7 @@ export default function RequestPayout() {
   const { potId } = useParams()
   const navigate = useNavigate()
   const [pot, setPot] = useState(null)
+  const [confirmedDays, setConfirmedDays] = useState(null)
   const [loadError, setLoadError] = useState('')
 
   const [payoutDate, setPayoutDate] = useState(new Date().toISOString().slice(0, 10))
@@ -26,14 +28,20 @@ export default function RequestPayout() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    getPot(potId)
-      .then(setPot)
+    Promise.all([getPot(potId), getPotBoard(potId)])
+      .then(([potData, boardData]) => {
+        setPot(potData)
+        // Count every confirmed day 1-31, exactly like the backend does —
+        // NOT pot.days_paid, which deliberately excludes day 31 so the
+        // 30-day progress bar never goes over 100%. Using days_paid here
+        // would understate the preview whenever day 31 has been paid.
+        const days = normalizeBoard(boardData, potData)
+        setConfirmedDays(days.filter((d) => d.status === 'paid').length)
+      })
       .catch((err) => setLoadError(extractErrorMessage(err)))
   }, [potId])
 
-  // Mirrors the backend's own calculation so the saver sees the real
-  // number before submitting — actual figures are snapshotted server-side.
-  const grossAmount = pot ? pot.days_paid * pot.daily_amount : 0
+  const grossAmount = pot && confirmedDays != null ? confirmedDays * pot.daily_amount : 0
   const platformFee = pot ? pot.daily_amount : 0
   const netPayout = grossAmount - platformFee
 
@@ -78,12 +86,12 @@ export default function RequestPayout() {
       <Link to={`/pots/${potId}`} className="text-sm text-muted hover:text-ink">&larr; Back to pot</Link>
       <h1 className="mt-3 text-3xl font-semibold">Request a payout</h1>
       <p className="mt-1 text-muted">
-        {pot.days_paid} day{pot.days_paid !== 1 ? 's' : ''} paid — choose when and how you'd like to be paid out.
+        {confirmedDays} day{confirmedDays !== 1 ? 's' : ''} paid — choose when and how you'd like to be paid out.
         You don't need to wait until the full 30 days are done.
       </p>
 
       <div className="card mt-6 grid grid-cols-2 gap-4 text-sm">
-        <Row label="Days covered" value={pot.days_paid} />
+        <Row label="Days covered" value={confirmedDays} />
         <Row label="Gross amount" value={<Money amount={grossAmount} currency={pot.currency} />} />
         <Row label="Platform fee" value={<Money amount={platformFee} currency={pot.currency} />} />
         <Row label="You'll receive" value={<Money amount={netPayout} currency={pot.currency} className="font-semibold" />} />

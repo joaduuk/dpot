@@ -8,14 +8,14 @@ from app.models.user import UserRole, UserStatus
 class UserRegister(BaseModel):
     full_name: str
     phone: str
-    email: Optional[EmailStr] = None
+    email: EmailStr  # required — no longer optional, needed for login-by-email and password reset
     password: str
     country: str = "GH"
     role: UserRole = UserRole.saver
 
 
 class UserLogin(BaseModel):
-    phone: str
+    identifier: str  # phone number OR email
     password: str
 
 
@@ -37,3 +37,12 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str

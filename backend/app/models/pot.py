@@ -8,6 +8,7 @@ from app.core.database import Base
 
 
 class PotStatus(str, enum.Enum):
+    awaiting_agent = "awaiting_agent"  # cash pot created, no agent has claimed it yet
     pending = "pending"        # Created, not started yet
     active = "active"          # Cycle running
     completed = "completed"    # 30 days done, awaiting cashout

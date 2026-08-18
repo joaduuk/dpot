@@ -5,12 +5,22 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import PotsList from './pages/PotsList'
 import CreatePot from './pages/CreatePot'
 import PotDetail from './pages/PotDetail'
 import MakePayment from './pages/MakePayment'
 import RequestPayout from './pages/RequestPayout'
 import Wallet from './pages/Wallet'
+import AgentApply from './pages/AgentApply'
+import AgentDashboard from './pages/AgentDashboard'
+import AgentRecordPayment from './pages/AgentRecordPayment'
+import AdminDashboard from './pages/AdminDashboard'
+import AdminSaverDetail from './pages/AdminSaverDetail'
+import AdminAddAdmin from './pages/AdminAddAdmin'
+import AdminRegisterAgent from './pages/AdminRegisterAgent'
+import RequireRole from './components/RequireRole'
 import NotFound from './pages/NotFound'
 
 export default function App() {
@@ -22,6 +32,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route
             path="/pots"
@@ -68,6 +80,76 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Wallet />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/agent/apply"
+            element={
+              <ProtectedRoute>
+                <AgentApply />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agent"
+            element={
+              <ProtectedRoute>
+                <RequireRole role="agent">
+                  <AgentDashboard />
+                </RequireRole>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agent/record"
+            element={
+              <ProtectedRoute>
+                <RequireRole role="agent">
+                  <AgentRecordPayment />
+                </RequireRole>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <RequireRole role={['admin', 'super_admin']}>
+                  <AdminDashboard />
+                </RequireRole>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/savers/:saverId"
+            element={
+              <ProtectedRoute>
+                <RequireRole role={['admin', 'super_admin']}>
+                  <AdminSaverDetail />
+                </RequireRole>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/admins/new"
+            element={
+              <ProtectedRoute>
+                <RequireRole role="super_admin">
+                  <AdminAddAdmin />
+                </RequireRole>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/agents/register"
+            element={
+              <ProtectedRoute>
+                <RequireRole role={['admin', 'super_admin']}>
+                  <AdminRegisterAgent />
+                </RequireRole>
               </ProtectedRoute>
             }
           />

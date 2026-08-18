@@ -46,11 +46,15 @@ export default function PotDetail() {
   // Matches the backend's own gate (_get_active_pot): "completed" (30/30
   // saving days done) can still accept a payment for day 31, the fee day —
   // only "cashed_out" (payout already done) or "pending" truly locks it out.
-  const payable = pot?.status === 'active' || pot?.status === 'completed'
+  //const payable = pot?.status === 'active' || pot?.status === 'completed'
+  const payable = pot?.status === 'active' || pot?.status === 'completed' || pot?.status === 'pending'
   // No further payments or buffer moves once a payout's been requested —
   // the pot is being wound down.
-  const canStillPay = payable && !payout
-  const hasBufferDays = canStillPay && bufferCount > 0
+  const isCash = pot?.payment_method === 'cash'
+  // Cash pots are recorded by the assigned agent, never the saver — the
+  // backend already rejects a saver's own /payments/record call for these.
+  const canStillPay = payable && !payout && !isCash
+  const hasBufferDays = payable && !payout && bufferCount > 0
 
   async function handleAllocate(dayNumber) {
     setAllocating(true)
@@ -109,6 +113,13 @@ export default function PotDetail() {
             Make a payment
           </Link>
         </div>
+      )}
+
+      {isCash && payable && !payout && (
+        <p className="mt-6 rounded-xl bg-ink/[0.03] px-4 py-3 text-sm text-muted">
+          This is a cash pot — hand your contribution to your agent and they'll record it here.
+          Once they do, any spare days will show up below as buffer days for you to place.
+        </p>
       )}
 
       <PayoutPanel pot={pot} payout={payout} />

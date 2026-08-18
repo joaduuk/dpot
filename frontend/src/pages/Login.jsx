@@ -3,23 +3,30 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../api/client'
 import Spinner from '../components/Spinner'
+import PasswordInput from '../components/PasswordInput'
 
 export default function Login() {
   const { login, loading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [phone, setPhone] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
-  const from = location.state?.from?.pathname || '/pots'
+  const explicitFrom = location.state?.from?.pathname
+
+  function destinationFor(role) {
+    if (role === 'agent') return '/agent'
+    if (role === 'admin' || role === 'super_admin') return '/admin'
+    return '/pots'
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     try {
-      await login(phone, password)
-      navigate(from, { replace: true })
+      const loggedInUser = await login(identifier, password)
+      navigate(explicitFrom || destinationFor(loggedInUser.role), { replace: true })
     } catch (err) {
       setError(extractErrorMessage(err))
     }
@@ -32,27 +39,29 @@ export default function Login() {
 
       <form onSubmit={handleSubmit} className="card mt-8 flex flex-col gap-4">
         <div>
-          <label className="field-label" htmlFor="phone">Phone number</label>
+          <label className="field-label" htmlFor="identifier">Phone or email</label>
           <input
-            id="phone"
-            type="tel"
+            id="identifier"
             required
-            autoComplete="tel"
+            autoComplete="username"
             className="field-input"
-            placeholder="024 123 4567"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            placeholder="024 123 4567 or you@example.com"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
         </div>
 
         <div>
-          <label className="field-label" htmlFor="password">Password</label>
-          <input
+          <div className="flex items-center justify-between">
+            <label className="field-label mb-0" htmlFor="password">Password</label>
+            <Link to="/forgot-password" className="text-xs font-medium text-teal hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+          <PasswordInput
             id="password"
-            type="password"
             required
             autoComplete="current-password"
-            className="field-input"
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

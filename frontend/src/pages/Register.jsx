@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../api/client'
 import Spinner from '../components/Spinner'
+import PasswordInput from '../components/PasswordInput'
 
 const COUNTRIES = [
   { code: 'GH', label: 'Ghana' },
@@ -100,12 +101,11 @@ export default function Register() {
 
         <div>
           <label className="field-label" htmlFor="password">Password</label>
-          <input
+          <PasswordInput
             id="password"
-            type="password"
             required
             minLength={8}
-            className="field-input"
+            autoComplete="new-password"
             placeholder="At least 8 characters"
             value={form.password}
             onChange={(e) => update('password', e.target.value)}

@@ -18,10 +18,10 @@ export function AuthProvider({ children }) {
     }
   }, [user])
 
-  const login = useCallback(async (phone, password) => {
+  const login = useCallback(async (identifier, password) => {
     setLoading(true)
     try {
-      const data = await authApi.login({ phone, password })
+      const data = await authApi.login({ identifier, password })
       localStorage.setItem('dailypot_token', data.access_token)
       setUser(data.user)
       return data.user
