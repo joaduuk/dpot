@@ -13,6 +13,8 @@ from app.models.agent import Agent, AgentStatus
 from app.models.payout import Payout, PayoutStatus
 from app.schemas.pot import PotCreate, PotResponse, PotSummary
 from app.schemas.payout import PayoutRequest, PayoutResponse
+from app.models.wallet import WalletTransaction, WalletTransactionType, WalletTransactionReason
+from app.routers.payments import get_or_create_wallet
 
 router = APIRouter(prefix="/pots", tags=["Pots"])
 
@@ -279,9 +281,16 @@ def request_payout(
         )
 
     gross_amount = confirmed_days * pot.daily_amount
-    platform_fee = pot.daily_amount  # TODO: confirm fee rule for early (partial) cashouts
-    agent_commission = 0.0  # TODO: plug in real commission rate for cash/agent-assisted pots
-    net_payout = gross_amount - platform_fee - agent_commission
+    platform_fee = pot.daily_amount
+
+    # Agent commission is a SHARE of the platform fee, not an extra charge
+    # on top of it — cash pots (which always have an assigned agent) split
+    # that one fee 50/50 between the platform and the agent. The saver
+    # only ever loses one day's worth either way; digital (non-cash) pots
+    # have no agent, so no commission is carved out.
+    agent_commission = platform_fee * 0.5 if pot.agent_id else 0.0
+    net_payout = gross_amount - platform_fee
+    
 
     now = datetime.utcnow()
     payout = Payout(
@@ -349,6 +358,25 @@ def complete_payout(
     pot = db.query(Pot).filter(Pot.id == pot_id).first()
     if pot:
         pot.status = PotStatus.cashed_out
+
+        # Credit the agent's commission to their own wallet now that the
+        # payout is actually done — this is the point where the commission
+        # becomes a real, spendable balance rather than just a number shown
+        # on the payout breakdown.
+        if pot.agent_id and payout.agent_commission > 0:
+            agent = db.query(Agent).filter(Agent.id == pot.agent_id).first()
+            if agent:
+                wallet = get_or_create_wallet(db, agent.user_id, pot.currency)
+                wallet.balance += payout.agent_commission
+                db.add(WalletTransaction(
+                    wallet_id=wallet.id,
+                    amount=payout.agent_commission,
+                    type=WalletTransactionType.credit,
+                    reason=WalletTransactionReason.agent_commission,
+                    reference_id=payout.id,
+                    note=f"Commission for {pot.name} payout",
+                ))
+                agent.total_commission_earned += payout.agent_commission
 
     db.commit()
     db.refresh(payout)
