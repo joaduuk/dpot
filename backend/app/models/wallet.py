@@ -19,6 +19,7 @@ class WalletTransactionReason(str, enum.Enum):
     referral = "referral"
     pot_payment = "pot_payment"
     cashback = "cashback"
+    agent_commission = "agent_commission"
 
 
 class Wallet(Base):
