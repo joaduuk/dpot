@@ -1,8 +1,21 @@
 # Daily Pot — deployment plan (VPS)
 
-Status: **draft**. Steps marked ⏳ depend on the server check (where the other
-apps' code lives, how their backends run, which ports are used). They will be
-filled in once that output arrives, so Daily Pot matches EEB/ROSCA exactly.
+Status: **draft**. Server layout confirmed (19 Oct 2026): each app lives in
+`/var/www/<app>`, its backend runs as a systemd service `<app>.service`
+(uvicorn on `127.0.0.1:800x`), and nginx serves `/var/www/<app>/frontend/dist`.
+Ports 8000–8004 are taken, so **Daily Pot uses 8005**. Server Python is 3.12.3.
+Phase 2 (database) and Phase 3 (backend) are done: code cloned to
+`/var/www/dailypot` via a read-only deploy key (`github-dpot` SSH alias),
+`dailypot.service` runs as the limited `dailypot` user on 127.0.0.1:8005.
+The first admin is made by registering normally, then promoting that user to
+`super_admin` in the database.
+Phases 1, 4 and 5 are done (19 Oct 2026): DNS points at the VPS, the frontend
+is built on the server, and nginx sites `dailypot` + `dailypot-api` (in
+sites-available, symlinked) serve https://dailypot.online and
+https://api.dailypot.online with Let's Encrypt certificates (expire
+2027-01-17, auto-renew). Live checks passed: HTTP→HTTPS redirects, security
+headers, docs/.env/.git return 404, CORS allows only dailypot.online.
+Remaining: first admin, email (Phase 7), update script, SSL Labs check.
 
 Target layout (same pattern as EEB):
 
@@ -62,7 +75,8 @@ names show the VPS address.
 
 ## Phase 2 — Database (on the server)
 
-Assuming Postgres runs directly on the server (pgAdmin config suggests so ⏳):
+Confirmed: Postgres runs directly on the server (one shared cluster). Other
+apps follow the `<app>_db` / `<app>_user` naming (eebapp_db, rosca_db, vimp_db…).
 
 1. Create a separate database user and database just for Daily Pot, with its
    own strong password. Never reuse EEB's or ROSCA's.
