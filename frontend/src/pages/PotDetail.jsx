@@ -87,7 +87,7 @@ export default function PotDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
       <Link to="/pots" className="text-sm text-muted hover:text-ink">&larr; My pots</Link>
 
       <div className="mt-3 flex items-start justify-between">
@@ -130,7 +130,7 @@ export default function PotDetail() {
         </p>
       )}
 
-      <div className="card mt-8">
+      <div className="card mt-8 p-4 sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Your board</h2>
           {allocating && <Spinner />}

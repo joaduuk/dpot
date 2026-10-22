@@ -21,13 +21,17 @@ import AdminSaverDetail from './pages/AdminSaverDetail'
 import AdminAddAdmin from './pages/AdminAddAdmin'
 import AdminRegisterAgent from './pages/AdminRegisterAgent'
 import RequireRole from './components/RequireRole'
+import { useAuth } from './context/AuthContext'
 import NotFound from './pages/NotFound'
 
 export default function App() {
+  const { isAuthenticated } = useAuth()
+
   return (
     <div className="min-h-screen bg-paper">
       <Navbar />
-      <main>
+      {/* Leave room for the phone tab bar (see Navbar) so it never covers content. */}
+      <main className={isAuthenticated ? 'pb-24 md:pb-0' : undefined}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />

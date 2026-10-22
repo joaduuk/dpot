@@ -153,9 +153,11 @@ export default function PotBoard({ board, pot, onAllocate, allocatable = false, 
           like any other day: droppable/tappable whenever it's still unpaid. */}
       <Dot day={feeDay} pot={pot} interactive={isDroppable(feeDay)} onActivate={() => placeOnDay(31)} />
 
-      <div className="flex flex-col items-center gap-2.5 rounded-pot bg-ink/[0.03] px-6 py-6">
+      {/* Phones get bigger dots with tighter gaps/padding, so the 6-dot rows
+          still fit a 360px screen. */}
+      <div className="flex flex-col items-center gap-1.5 rounded-pot bg-ink/[0.03] px-3 py-4 sm:gap-2.5 sm:px-6 sm:py-6">
         {rows.map((row, idx) => (
-          <div key={idx} className="flex items-center gap-2.5">
+          <div key={idx} className="flex items-center gap-1.5 sm:gap-2.5">
             {row.map((day) => (
               <Dot
                 key={day.day_number}
@@ -207,13 +209,14 @@ function Dot({ day, pot, interactive, onActivate }) {
           : undefined
       }
       title={title}
-      className={`group flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-full border text-[11px] font-mono font-semibold
+      className={`group flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-px rounded-full border text-xs font-mono font-semibold
+        sm:h-9 sm:w-9 sm:gap-0 sm:text-[11px]
         transition-all ${dotStyle(status, day.is_fee_day)}
         ${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
     >
       <span className="leading-none">{day.day_number}</span>
       {targetDate && (
-        <span className="text-[8px] font-normal leading-none text-current/70">
+        <span className="text-[9px] font-normal leading-none text-current/70 sm:text-[8px]">
           {formatShort(targetDate)}
         </span>
       )}
@@ -239,7 +242,7 @@ function BufferTray({ count, busy }) {
               e.dataTransfer.effectAllowed = 'move'
             }}
             title="Buffer day — drag onto a blank day"
-            className={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-dashed
+            className={`flex h-10 w-10 items-center justify-center rounded-full border-2 border-dashed sm:h-9 sm:w-9
               border-gold bg-gold-soft/60 text-ink transition-transform
               ${busy ? 'opacity-50' : 'cursor-grab hover:scale-110 active:cursor-grabbing'}`}
           >
