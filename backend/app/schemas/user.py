@@ -27,6 +27,7 @@ class UserResponse(BaseModel):
     role: UserRole
     status: UserStatus
     country: str
+    email_verified: bool = False
     created_at: datetime
 
     class Config:
@@ -40,6 +41,14 @@ class TokenResponse(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ConfirmEmailRequest(BaseModel):
+    token: str
+
+
+class ResendConfirmationRequest(BaseModel):
     email: EmailStr
 
 

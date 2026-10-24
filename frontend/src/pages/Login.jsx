@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../api/client'
 import Spinner from '../components/Spinner'
 import PasswordInput from '../components/PasswordInput'
+import ResendConfirmation from '../components/ResendConfirmation'
 
 export default function Login() {
   const { login, loading } = useAuth()
@@ -12,6 +13,8 @@ export default function Login() {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  // Set when the password was right but the email hasn't been confirmed yet.
+  const [unverifiedEmail, setUnverifiedEmail] = useState('')
 
   const explicitFrom = location.state?.from?.pathname
 
@@ -24,10 +27,13 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setUnverifiedEmail('')
     try {
       const loggedInUser = await login(identifier, password)
       navigate(explicitFrom || destinationFor(loggedInUser.role), { replace: true })
     } catch (err) {
+      const detail = err?.response?.data?.detail
+      if (detail?.code === 'email_not_verified') setUnverifiedEmail(detail.email)
       setError(extractErrorMessage(err))
     }
   }
@@ -36,6 +42,17 @@ export default function Login() {
     <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-6">
       <h1 className="text-3xl font-semibold">Welcome back</h1>
       <p className="mt-1 text-muted">Log in to keep your pot on track.</p>
+
+      {location.state?.justVerified && (
+        <p className="mt-6 rounded-lg bg-teal-pale px-3 py-2 text-sm text-teal">
+          Your email is confirmed — log in to get started.
+        </p>
+      )}
+      {location.state?.justReset && (
+        <p className="mt-6 rounded-lg bg-teal-pale px-3 py-2 text-sm text-teal">
+          Password updated — log in with your new password.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="card mt-8 flex flex-col gap-4">
         <div>
@@ -77,6 +94,8 @@ export default function Login() {
         <button type="submit" disabled={loading} className="btn-primary mt-1 w-full">
           {loading ? <Spinner className="border-paper/30 border-t-paper" /> : 'Log in'}
         </button>
+
+        {unverifiedEmail && <ResendConfirmation email={unverifiedEmail} />}
       </form>
 
       <p className="mt-6 text-center text-sm text-muted">

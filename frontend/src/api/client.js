@@ -40,6 +40,8 @@ export function extractErrorMessage(error) {
   const detail = error?.response?.data?.detail
   if (!detail) return error?.message || 'Something went wrong. Please try again.'
   if (typeof detail === 'string') return detail
+  // Structured errors, e.g. { code: 'email_not_verified', message, email } from /auth/login.
+  if (detail.message) return detail.message
   if (Array.isArray(detail)) {
     return detail.map((d) => d.msg || JSON.stringify(d)).join(' · ')
   }

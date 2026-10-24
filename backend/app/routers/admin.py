@@ -109,6 +109,8 @@ def register_agent_existing(
     )
     db.add(agent)
     user.role = UserRole.agent
+    # The admin is vouching for this person, so they don't need to confirm.
+    user.email_verified = True
     db.commit()
     db.refresh(agent)
     return agent
@@ -136,6 +138,7 @@ def register_agent_new(
         hashed_password=hash_password(data.password),
         role=UserRole.agent,
         status=UserStatus.active,
+        email_verified=True,
     )
     db.add(user)
     db.flush()
@@ -362,6 +365,7 @@ def create_admin(
         hashed_password=hash_password(data.password),
         role=UserRole(data.role),
         status=UserStatus.active,
+        email_verified=True,
     )
     db.add(new_admin)
     db.commit()

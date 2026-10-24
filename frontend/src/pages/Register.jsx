@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { extractErrorMessage } from '../api/client'
 import Spinner from '../components/Spinner'
 import PasswordInput from '../components/PasswordInput'
+import ResendConfirmation from '../components/ResendConfirmation'
 
 const COUNTRIES = [
   { code: 'GH', label: 'Ghana' },
@@ -14,7 +15,6 @@ const COUNTRIES = [
 
 export default function Register() {
   const { register, loading } = useAuth()
-  const navigate = useNavigate()
   const [form, setForm] = useState({
     full_name: '',
     phone: '',
@@ -24,6 +24,7 @@ export default function Register() {
     role: 'saver',
   })
   const [error, setError] = useState('')
+  const [registeredEmail, setRegisteredEmail] = useState('')
 
   function update(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -33,11 +34,36 @@ export default function Register() {
     e.preventDefault()
     setError('')
     try {
-      await register(form)
-      navigate('/pots', { replace: true })
+      const created = await register(form)
+      setRegisteredEmail(created.email)
     } catch (err) {
       setError(extractErrorMessage(err))
     }
+  }
+
+  if (registeredEmail) {
+    return (
+      <div className="mx-auto flex min-h-[80vh] max-w-md flex-col justify-center px-6 py-10">
+        <h1 className="text-3xl font-semibold">Check your inbox</h1>
+        <p className="mt-1 text-muted">One last step before you start saving.</p>
+
+        <div className="card mt-8 flex flex-col gap-4">
+          <p className="text-sm">
+            We've sent a confirmation link to <strong>{registeredEmail}</strong>. Click it to
+            activate your account, then log in. The link expires in 48 hours — check your spam
+            folder if it hasn't arrived in a few minutes.
+          </p>
+          <ResendConfirmation email={registeredEmail} startCoolingDown />
+        </div>
+
+        <p className="mt-6 text-center text-sm text-muted">
+          Already confirmed?{' '}
+          <Link to="/login" className="font-semibold text-teal hover:underline">
+            Log in
+          </Link>
+        </p>
+      </div>
+    )
   }
 
   return (
