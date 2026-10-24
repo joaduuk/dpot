@@ -11,7 +11,9 @@ class UserRegister(BaseModel):
     email: EmailStr  # required — no longer optional, needed for login-by-email and password reset
     password: str
     country: str = "GH"
-    role: UserRole = UserRole.saver
+    # No role field: public sign-up always makes a saver. Agents and admins
+    # come only from the admin endpoints or the agent-apply flow. Extra
+    # fields (e.g. a client-sent "role") are ignored by pydantic.
 
 
 class UserLogin(BaseModel):
@@ -27,6 +29,7 @@ class UserResponse(BaseModel):
     role: UserRole
     status: UserStatus
     country: str
+    email_verified: bool = False
     created_at: datetime
 
     class Config:
@@ -40,6 +43,14 @@ class TokenResponse(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ConfirmEmailRequest(BaseModel):
+    token: str
+
+
+class ResendConfirmationRequest(BaseModel):
     email: EmailStr
 
 

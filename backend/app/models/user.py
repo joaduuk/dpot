@@ -35,6 +35,10 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
+    # Self-registered savers must click the emailed link before they can log
+    # in; accounts an admin creates are trusted and start verified.
+    email_verified = Column(Boolean, default=False, nullable=False)
+    email_verification_sent_at = Column(DateTime, nullable=True)
 
     # Relationships
     pots = relationship("Pot", back_populates="saver", foreign_keys="Pot.saver_id")

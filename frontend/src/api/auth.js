@@ -2,7 +2,7 @@ import { apiClient } from './client'
 
 /**
  * POST /auth/register
- * body: { full_name, phone, email, password, country, role }
+ * body: { full_name, phone, email, password, country } — always creates a saver
  */
 export function register(payload) {
   return apiClient.post('/auth/register', payload).then((res) => res.data)
@@ -25,4 +25,14 @@ export function forgotPassword(email) {
 /** POST /auth/reset-password — body: { token, new_password } */
 export function resetPassword(token, newPassword) {
   return apiClient.post('/auth/reset-password', { token, new_password: newPassword }).then((res) => res.data)
+}
+
+/** POST /auth/confirm-email — body: { token } from the emailed link */
+export function confirmEmail(token) {
+  return apiClient.post('/auth/confirm-email', { token }).then((res) => res.data)
+}
+
+/** POST /auth/resend-confirmation — body: { email } */
+export function resendConfirmation(email) {
+  return apiClient.post('/auth/resend-confirmation', { email }).then((res) => res.data)
 }

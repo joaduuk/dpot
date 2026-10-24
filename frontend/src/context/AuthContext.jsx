@@ -33,13 +33,13 @@ export function AuthProvider({ children }) {
   const register = useCallback(async (payload) => {
     setLoading(true)
     try {
-      // /auth/register just creates the account — log the saver in right after.
-      await authApi.register(payload)
-      return login(payload.phone, payload.password)
+      // /auth/register creates the account and emails a confirmation link;
+      // the saver can only log in once they've clicked it.
+      return await authApi.register(payload)
     } finally {
       setLoading(false)
     }
-  }, [login])
+  }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem('dailypot_token')
