@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -57,3 +57,14 @@ class ResendConfirmationRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+
+class ProfileUpdate(BaseModel):
+    # Only the safe fields — email changes go through email confirmation.
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8)

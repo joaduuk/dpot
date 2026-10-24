@@ -36,3 +36,20 @@ export function confirmEmail(token) {
 export function resendConfirmation(email) {
   return apiClient.post('/auth/resend-confirmation', { email }).then((res) => res.data)
 }
+
+/** GET /auth/me — the signed-in user's own details */
+export function getMe() {
+  return apiClient.get('/auth/me').then((res) => res.data)
+}
+
+/** PATCH /auth/me — body: { full_name?, phone? } (email can't be changed here) */
+export function updateMe(payload) {
+  return apiClient.patch('/auth/me', payload).then((res) => res.data)
+}
+
+/** POST /auth/change-password — body: { current_password, new_password } */
+export function changePassword(currentPassword, newPassword) {
+  return apiClient
+    .post('/auth/change-password', { current_password: currentPassword, new_password: newPassword })
+    .then((res) => res.data)
+}
