@@ -21,17 +21,16 @@ import AdminSaverDetail from './pages/AdminSaverDetail'
 import AdminAddAdmin from './pages/AdminAddAdmin'
 import AdminRegisterAgent from './pages/AdminRegisterAgent'
 import RequireRole from './components/RequireRole'
-import { useAuth } from './context/AuthContext'
 import NotFound from './pages/NotFound'
+import Footer from './components/Footer'
+import { legalRoutes } from './pages/legal/routes'
 
 export default function App() {
-  const { isAuthenticated } = useAuth()
-
   return (
-    <div className="min-h-screen bg-paper">
+    <div className="flex min-h-screen flex-col bg-paper">
       <Navbar />
-      {/* Leave room for the phone tab bar (see Navbar) so it never covers content. */}
-      <main className={isAuthenticated ? 'pb-24 md:pb-0' : undefined}>
+      {/* The footer leaves room for the phone tab bar (see Navbar), so it never covers content. */}
+      <main className="flex-1">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -158,9 +157,12 @@ export default function App() {
             }
           />
 
+          {legalRoutes}
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+      <Footer />
     </div>
   )
 }
