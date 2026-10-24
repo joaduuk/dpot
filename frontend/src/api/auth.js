@@ -2,7 +2,7 @@ import { apiClient } from './client'
 
 /**
  * POST /auth/register
- * body: { full_name, phone, email, password, country, role }
+ * body: { full_name, phone, email, password, country } — always creates a saver
  */
 export function register(payload) {
   return apiClient.post('/auth/register', payload).then((res) => res.data)

@@ -21,7 +21,6 @@ export default function Register() {
     email: '',
     password: '',
     country: 'GH',
-    role: 'saver',
   })
   const [error, setError] = useState('')
   const [registeredEmail, setRegisteredEmail] = useState('')
