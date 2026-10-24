@@ -46,7 +46,10 @@ export default function Navbar() {
                 <Link to="/pots/new" className="btn-gold">New pot</Link>
 
                 <div className="flex items-center gap-3 pl-3 border-l border-ink/10">
-                  <span className="hidden lg:block text-ink/60">{user?.full_name}</span>
+                  <Link to="/profile" className="text-ink/70 hover:text-ink transition-colors" title="Profile">
+                    <span className="lg:hidden">Profile</span>
+                    <span className="hidden lg:inline">{user?.full_name}</span>
+                  </Link>
                   <button onClick={handleLogout} className="text-ink/50 hover:text-clay transition-colors">
                     Log out
                   </button>
@@ -104,6 +107,7 @@ function MobileTabBar({ role }) {
         </NavLink>
 
         {roleTab && <Tab to={roleTab.to} label={roleTab.label} icon={roleTab.icon} />}
+        <Tab to="/profile" label="Profile" icon={<IconUser />} />
       </div>
     </nav>
   )
@@ -159,6 +163,15 @@ function IconBriefcase() {
     <svg {...iconProps}>
       <rect x="3" y="7.5" width="18" height="12" rx="2" />
       <path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5M3 13h18" />
+    </svg>
+  )
+}
+
+function IconUser() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
     </svg>
   )
 }

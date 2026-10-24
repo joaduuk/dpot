@@ -13,6 +13,7 @@ import PotDetail from './pages/PotDetail'
 import MakePayment from './pages/MakePayment'
 import RequestPayout from './pages/RequestPayout'
 import Wallet from './pages/Wallet'
+import Profile from './pages/Profile'
 import AgentApply from './pages/AgentApply'
 import AgentDashboard from './pages/AgentDashboard'
 import AgentRecordPayment from './pages/AgentRecordPayment'
@@ -84,6 +85,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Wallet />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />
